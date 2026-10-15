@@ -11,6 +11,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
     accuracy_score,
     average_precision_score,
+    brier_score_loss,
     classification_report,
     confusion_matrix,
     f1_score,
@@ -21,6 +22,64 @@ from sklearn.metrics import (
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
+
+
+def threshold_analysis(y_true, probabilities, thresholds=(0.25, 0.50, 0.75)):
+    """Compare outreach workload and positive-class metrics at candidate thresholds."""
+    y_values = pd.Series(y_true).astype(int).to_numpy()
+    probability_values = pd.Series(probabilities).to_numpy()
+    rows = []
+    for threshold in thresholds:
+        predicted = (probability_values >= threshold).astype(int)
+        rows.append({
+            "threshold": float(threshold),
+            "flagged_count": int(predicted.sum()),
+            "flagged_rate": float(predicted.mean()),
+            "precision_at_risk": float(precision_score(y_values, predicted, zero_division=0)),
+            "recall_at_risk": float(recall_score(y_values, predicted, zero_division=0)),
+            "f1_at_risk": float(f1_score(y_values, predicted, zero_division=0)),
+        })
+    return rows
+
+
+def subgroup_audit(X_test, y_test, probabilities, min_group_size=5):
+    """Report descriptive error rates for available demographic columns.
+
+    This is a screening aid, not a fairness certification. Small groups are
+    omitted to reduce unstable estimates; group labels are not altered here.
+    """
+    audit_columns = ("gender", "age_band", "region", "highest_education")
+    y_values = pd.Series(y_test).astype(int).to_numpy()
+    probability_values = pd.Series(probabilities).to_numpy()
+    results = {}
+    for column in audit_columns:
+        if column not in X_test.columns:
+            continue
+        frame = pd.DataFrame({
+            "group": X_test[column].astype("string").fillna("Missing").to_numpy(),
+            "actual": y_values,
+            "probability": probability_values,
+        })
+        group_rows = []
+        for group_name, group in frame.groupby("group", dropna=False, sort=True):
+            if len(group) < min_group_size:
+                continue
+            actual = group["actual"].to_numpy()
+            predicted = (group["probability"].to_numpy() >= 0.5).astype(int)
+            positives = int((actual == 1).sum())
+            negatives = int((actual == 0).sum())
+            true_positives = int(((actual == 1) & (predicted == 1)).sum())
+            false_positives = int(((actual == 0) & (predicted == 1)).sum())
+            group_rows.append({
+                "group": str(group_name),
+                "n": int(len(group)),
+                "actual_at_risk_rate": float(actual.mean()),
+                "flagged_rate": float(predicted.mean()),
+                "recall_at_0_5": float(true_positives / positives) if positives else None,
+                "false_positive_rate_at_0_5": float(false_positives / negatives) if negatives else None,
+            })
+        results[column] = group_rows
+    return results
 
 
 def train(features_csv, model_path, metrics_path, seed=42):
@@ -80,6 +139,22 @@ def train(features_csv, model_path, metrics_path, seed=42):
     model.fit(X.iloc[train_idx], y_train)
     pred = model.predict(X.iloc[test_idx])
     prob = model.predict_proba(X.iloc[test_idx])[:, 1]
+
+    # Post-hoc audit uses held-out rows, before the deployable all-row refit.
+    # Permutation importance measures predictive association, not causation.
+    from sklearn.inspection import permutation_importance
+    importance = permutation_importance(
+        model, X.iloc[test_idx], y_test, scoring="average_precision",
+        n_repeats=3, random_state=seed, n_jobs=-1
+    )
+    importance_rows = sorted(
+        [
+            {"feature": str(feature), "importance_mean": float(mean), "importance_std": float(std)}
+            for feature, mean, std in zip(X.columns, importance.importances_mean, importance.importances_std)
+        ],
+        key=lambda row: row["importance_mean"],
+        reverse=True,
+    )[:10]
     metrics = {
         "model": "RandomForestClassifier",
         "split": "GroupShuffleSplit by id_student",
@@ -94,6 +169,10 @@ def train(features_csv, model_path, metrics_path, seed=42):
         "f1_at_risk": float(f1_score(y_test, pred, zero_division=0)),
         "roc_auc": float(roc_auc_score(y_test, prob)) if y_test.nunique() == 2 else None,
         "pr_auc": float(average_precision_score(y_test, prob)),
+        "brier_score": float(brier_score_loss(y_test, prob)),
+        "threshold_analysis": threshold_analysis(y_test, prob),
+        "subgroup_audit": subgroup_audit(X.iloc[test_idx], y_test, prob),
+        "permutation_importance_top10": importance_rows,
         "confusion_matrix": confusion_matrix(y_test, pred, labels=[0, 1]).tolist(),
         "confusion_matrix_labels": ["actual_not_at_risk", "actual_at_risk"],
         "classification_report": classification_report(
@@ -101,10 +180,14 @@ def train(features_csv, model_path, metrics_path, seed=42):
             zero_division=0, output_dict=True
         ),
         "feature_columns": X.columns.tolist(),
-        "note": (
-            "Random student-grouped holdout; this does not establish future-cohort "
-            "performance. Evaluate on a later presentation before deployment."
-        ),
+        "audit_notes": [
+            "Random student-grouped holdout; this does not establish future-cohort performance.",
+            "Brier score summarizes probability error; lower is better, but calibration curves should also be inspected.",
+            "Threshold comparisons show trade-offs and do not prescribe an operational threshold.",
+            "Subgroup metrics are descriptive and can be unstable; they are not a fairness certification.",
+            "Permutation importance measures held-out predictive association, not causation.",
+            "Evaluate on a genuinely later presentation before any deployment decision."
+        ],
     }
 
     # Refit after evaluation for a deployable artifact. Reported metrics remain from holdout.

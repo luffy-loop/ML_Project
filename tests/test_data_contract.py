@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from src.data import build_features
-from src.train import train
+from src.train import train, threshold_analysis, subgroup_audit
 
 
 def _write_minimal_oulad(directory: Path):
@@ -97,6 +97,25 @@ def test_train_saves_pipeline_metrics_and_keeps_groups_separate(tmp_path):
     assert saved["train_students"] + saved["test_students"] == 40
     assert saved["roc_auc"] is not None
     assert 0 <= metrics["pr_auc"] <= 1
+    assert 0 <= metrics["brier_score"] <= 1
+    assert [row["threshold"] for row in metrics["threshold_analysis"]] == [0.25, 0.5, 0.75]
+    assert len(metrics["permutation_importance_top10"]) > 0
+    assert "audit_notes" in metrics
+
+
+def test_threshold_analysis_exposes_workload_tradeoffs():
+    rows = threshold_analysis([0, 1, 1, 0], [0.1, 0.9, 0.4, 0.6])
+    assert [row["flagged_count"] for row in rows] == [3, 2, 1]
+    assert all(0 <= row["flagged_rate"] <= 1 for row in rows)
+
+
+def test_subgroup_audit_reports_only_groups_meeting_minimum_size():
+    X = pd.DataFrame({"gender": ["F"] * 5 + ["M"] * 2})
+    y = pd.Series([1, 0, 1, 0, 1, 0, 1])
+    result = subgroup_audit(X, y, [0.8, 0.2, 0.7, 0.3, 0.9, 0.8, 0.1], min_group_size=5)
+    assert len(result["gender"]) == 1
+    assert result["gender"][0]["group"] == "F"
+    assert result["gender"][0]["n"] == 5
 
 
 def test_train_rejects_single_class_dataset(tmp_path):

@@ -10,7 +10,8 @@ A machine-learning project to study student outcomes and identify learners who m
 - `OULAD_Final_2026_Q1_Publication_Notebook.ipynb` — extended temporal evaluation, calibration, explainability, fairness and reporting workflow. Run all cells; saved outputs are not proof of a complete run.
 - `src/data.py` — loads OULAD CSVs and creates features filtered to a documented day cutoff.
 - `src/build_features.py` — writes a prepared feature CSV and data-quality report.
-- `src/train.py` — student-grouped baseline evaluation and final pipeline artifact.
+- `src/train.py` — student-grouped baseline, threshold/workload analysis, Brier score, demographic subgroup error audit, permutation importance, and final pipeline artifact.
+- `MODEL_CARD.md` — intended use, evaluation protocol, known risks, and responsible-use limits.
 - `app.py` — Streamlit CSV-scoring demo.
 - `tests/` — lightweight tests using synthetic data; these do not replace validation on the full dataset.
 - `cleaned_AI_Powered_Student_Performance_Prediction_and_Success_Analytics.pptx` — presentation.
@@ -53,7 +54,7 @@ pytest -q
 streamlit run app.py
 ```
 
-The build command also writes `reports/data_quality.json`; training writes `reports/metrics.json` and `models/student_risk_pipeline.joblib`. These outputs are generated locally and ignored by Git.
+The build command also writes `reports/data_quality.json`; training writes `reports/metrics.json` and `models/student_risk_pipeline.joblib`. Metrics include held-out threshold/workload comparisons, Brier score, subgroup error-rate summaries (where groups are large enough), and model-agnostic permutation importance. These outputs are generated locally and ignored by Git.
 
 The model uses only input columns present in the feature CSV, excluding `At_Risk` and `id_student`. Keep the student ID for grouped evaluation and identification only; do not use it as a predictive feature. The app accepts a CSV with the same predictors used in training. Remove direct identifiers before using it in any shared demo.
 
@@ -62,7 +63,7 @@ The model uses only input columns present in the feature CSV, excluding `At_Risk
 - The label is based on final result (`Fail`/`Withdrawn` = at-risk; `Pass`/`Distinction` = not-at-risk). Predictors must be available at the actual prediction cutoff. The baseline filters assessment definitions and VLE events by date, but the intended cutoff and source dataset date semantics must be verified against OULAD documentation before making operational claims.
 - The grouped holdout prevents the same student ID from being split across train and test, but it is **not** a future-presentation holdout. Evaluate on a genuinely later presentation before claiming future-cohort generalization.
 - Risk bands in `app.py` are illustrative bins, not calibrated operational thresholds. Scores should not be treated as calibrated probabilities until calibration is evaluated.
-- Check data quality, group-level error rates, missingness and subgroup fairness. Use predictions to offer voluntary support, never as an automatic basis for penalties or access restrictions.
+- Review the generated threshold analysis, Brier score, subgroup error rates, missingness and permutation importance. These are diagnostic aids, not proof of fairness or causality. Use predictions to offer voluntary support, never as an automatic basis for penalties or access restrictions.
 - The second notebook includes research outputs (SHAP/LIME, timing, fairness, ablation, confidence intervals). Its saved execution metadata shows many cells not completed; run from top to bottom and fix failures before citing its results.
 
 ## Current completion status
