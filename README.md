@@ -2,67 +2,69 @@
 
 A machine-learning project to study student outcomes and identify learners who may benefit from timely academic support.
 
-> **Status:** The repository currently contains an exploratory notebook. The saved notebook results are preliminary; validate features at the intended prediction cutoff and re-evaluate with student-grouped/future-cohort splits before presenting the metrics as real-world early-warning performance.
+> **Status:** This repository contains exploratory and publication-oriented notebooks, plus a reusable cutoff-aware baseline pipeline and Streamlit demo. The production-style pipeline has not yet been run end-to-end against the full OULAD data in a clean environment. Treat saved notebook metrics as preliminary until the corrected temporal evaluation has completed successfully.
 
 ## Repository contents
 
-- `MLProject.ipynb` — current data processing, model training, metrics and plots.
-- `cleaned_AI_Powered_Student_Performance_Prediction_and_Success_Analytics.pptx` — project presentation.
+- `MLProject.ipynb` — original exploratory notebook.
+- `OULAD_Final_2026_Q1_Publication_Notebook.ipynb` — extended temporal evaluation, calibration, explainability, fairness and reporting workflow. Run all cells; saved outputs are not proof of a complete run.
+- `src/data.py` — loads OULAD CSVs and creates features filtered to a documented day cutoff.
+- `src/build_features.py` — writes a prepared feature CSV and data-quality report.
+- `src/train.py` — student-grouped baseline evaluation and final pipeline artifact.
+- `app.py` — Streamlit CSV-scoring demo.
+- `tests/` — lightweight tests using synthetic data; these do not replace validation on the full dataset.
+- `cleaned_AI_Powered_Student_Performance_Prediction_and_Success_Analytics.pptx` — presentation.
 - `AI_POWERED_STUDENT_PERFORMANCE_AND_SUCCESS_PREDICTION_SYSTEM.docx` — project document.
-- `PROJECT_REVIEW_AND_ACTION_PLAN.md` — code review, priority fixes, implementation phases and definition of done.
-
-## Current workflow
-
-1. Load student information, assessment, and virtual learning environment (VLE) activity data.
-2. Define a binary outcome: `Withdrawn`/`Fail` → at-risk; `Pass`/`Distinction` → not-at-risk.
-3. Aggregate student/course features.
-4. Train Logistic Regression, Random Forest, and CatBoost.
-5. Compare precision, recall, F1, accuracy and ROC-AUC; inspect feature importance and confusion matrix.
 
 ## Dataset setup
 
-The notebook currently expects these CSV files in its working directory:
+The feature pipeline expects these OULAD CSV files under `data/raw/`:
 
 - `studentInfo.csv`
 - `studentAssessment.csv`
 - `assessments.csv`
 - `studentVle.csv`
 
-The notebook appears designed for the Open University Learning Analytics Dataset (OULAD). Obtain the dataset through its official source and check its licence and usage conditions. Do not commit raw data containing student-level information to this repository unless you have verified permission and necessity. Put downloaded data in a local `data/` directory and adjust notebook paths if desired.
+Obtain the dataset from its official distribution and review its usage conditions. Never commit raw student-level data to this repository unless permission and necessity have been verified.
 
-## Run in Google Colab
+## Install
 
-1. Open [MLProject.ipynb](./MLProject.ipynb) in Google Colab.
-2. Upload the four required CSV files when prompted, or change the notebook to read from a mounted Drive/data directory.
-3. Run cells from top to bottom.
-4. Save the generated metric tables and plots after you have corrected the prediction cutoff and validation split described below.
-
-## Run locally
-
-Create and activate a virtual environment, then install the main notebook dependencies:
+Python 3.10 or newer is recommended.
 
 ```bash
 python -m venv .venv
-# Windows:
-.venv\\Scripts\\activate
-# macOS/Linux:
+# Windows PowerShell
+.venv\\Scripts\\Activate.ps1
+# macOS/Linux
 source .venv/bin/activate
 
 python -m pip install --upgrade pip
-python -m pip install pandas numpy matplotlib seaborn scikit-learn catboost jupyter
-jupyter notebook MLProject.ipynb
+python -m pip install -r requirements.txt
 ```
 
-Use a Python version supported by the installed package releases. For reproducibility, pin tested versions in a `requirements.txt` after the notebook has been run successfully in a clean environment.
+## Reproducible baseline pipeline
 
-## Important validation before submission
+From the repository root:
 
-The target uses the final course result. The current notebook's `mean_score`, `max_score`, and `assessment_count` features are aggregated across assessment rows and may include information unavailable at the time an early-warning prediction would be made. This can cause target leakage. If the project claims to predict risk by day 28, enforce a day-28 cutoff for every predictor and exclude later data.
+```bash
+python src/build_features.py --data-dir data/raw --cutoff-day 28
+python src/train.py --features data/processed/features_day28.csv
+pytest -q
+streamlit run app.py
+```
 
-A random row split can also allow records for the same student to appear in both training and test sets. Compare performance using a student-grouped split and, if predicting future intakes, a chronological/presentation holdout. Recompute all metrics, risk thresholds and feature importance after making these changes.
+The build command also writes `reports/data_quality.json`; training writes `reports/metrics.json` and `models/student_risk_pipeline.joblib`. These outputs are generated locally and ignored by Git.
 
-See [PROJECT_REVIEW_AND_ACTION_PLAN.md](./PROJECT_REVIEW_AND_ACTION_PLAN.md) for the complete checklist.
+The model uses only input columns present in the feature CSV, excluding `At_Risk` and `id_student`. Keep the student ID for grouped evaluation and identification only; do not use it as a predictive feature. The app accepts a CSV with the same predictors used in training. Remove direct identifiers before using it in any shared demo.
 
-## Responsible use
+## Important research caveats
 
-Use risk estimates to prioritize supportive outreach, not to penalize students or make high-impact decisions automatically. Explain the limits of historical data, evaluate errors and group-level performance, protect student privacy, and ensure that probabilities and risk labels are validated before showing them to users.
+- The label is based on final result (`Fail`/`Withdrawn` = at-risk; `Pass`/`Distinction` = not-at-risk). Predictors must be available at the actual prediction cutoff. The baseline filters assessment definitions and VLE events by date, but the intended cutoff and source dataset date semantics must be verified against OULAD documentation before making operational claims.
+- The grouped holdout prevents the same student ID from being split across train and test, but it is **not** a future-presentation holdout. Evaluate on a genuinely later presentation before claiming future-cohort generalization.
+- Risk bands in `app.py` are illustrative bins, not calibrated operational thresholds. Scores should not be treated as calibrated probabilities until calibration is evaluated.
+- Check data quality, group-level error rates, missingness and subgroup fairness. Use predictions to offer voluntary support, never as an automatic basis for penalties or access restrictions.
+- The second notebook includes research outputs (SHAP/LIME, timing, fairness, ablation, confidence intervals). Its saved execution metadata shows many cells not completed; run from top to bottom and fix failures before citing its results.
+
+## Current completion status
+
+The repository structure and baseline code are in place. **The full data pipeline, publication notebook and interactive demo are not yet verified end-to-end on the full dataset.** Do not claim the project is fully complete until the generated metrics have been reviewed and the project document/presentation have been reconciled with those results.

@@ -1,16 +1,107 @@
-"""Small contract tests for labels and cutoff logic."""
+"""Unit tests for target mapping, cutoff enforcement and grouped model training."""
+import json
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
-
-def test_target_mapping_is_explicit():
-    labels = pd.Series(["Withdrawn", "Fail", "Pass", "Distinction", "Unknown"])
-    mapped = labels.map({"Withdrawn": 1, "Fail": 1, "Pass": 0, "Distinction": 0})
-    assert mapped.iloc[:4].tolist() == [1, 1, 0, 0]
-    assert pd.isna(mapped.iloc[4])
+from src.data import build_features
+from src.train import train
 
 
-def test_cutoff_filters_later_rows():
-    events = pd.DataFrame({"date": [0, 28, 29, 100], "clicks": [1, 2, 3, 4]})
-    early = events[(events["date"] >= 0) & (events["date"] <= 28)]
-    assert early["clicks"].tolist() == [1, 2]
+def _write_minimal_oulad(directory: Path):
+    pd.DataFrame({
+        "id_student": [1, 2, 3, 4],
+        "code_module": ["AAA"] * 4,
+        "code_presentation": ["2014J"] * 4,
+        "gender": ["M", "F", "M", "F"],
+        "region": ["North", "South", "North", "South"],
+        "highest_education": ["A Level"] * 4,
+        "age_band": ["0-35"] * 4,
+        "num_of_prev_attempts": [0, 0, 1, 0],
+        "studied_credits": [60, 60, 120, 60],
+        "final_result": ["Pass", "Fail", "Withdrawn", "Distinction"],
+    }).to_csv(directory / "studentInfo.csv", index=False)
+    pd.DataFrame({
+        "id_assessment": [10, 10, 11, 11, 12, 12],
+        "id_student": [1, 2, 3, 4, 1, 2],
+        "date_submitted": [5, 7, 20, 21, 35, 36],
+        "is_banked": [0] * 6,
+        "score": [80, 30, 0, 90, 100, 45],
+    }).to_csv(directory / "studentAssessment.csv", index=False)
+    pd.DataFrame({
+        "id_assessment": [10, 11, 12],
+        "code_module": ["AAA"] * 3,
+        "code_presentation": ["2014J"] * 3,
+        "assessment_type": ["TMA"] * 3,
+        "date": [10, 28, 40],
+        "weight": [30, 30, 40],
+    }).to_csv(directory / "assessments.csv", index=False)
+    pd.DataFrame({
+        "code_module": ["AAA"] * 5,
+        "code_presentation": ["2014J"] * 5,
+        "id_student": [1, 1, 2, 3, 4],
+        "id_site": [100, 101, 100, 100, 102],
+        "date": [0, 28, 29, 10, 70],
+        "sum_click": [2, 4, 99, 5, 7],
+    }).to_csv(directory / "studentVle.csv", index=False)
+
+
+def test_build_features_enforces_day_cutoff_and_one_row_per_student(tmp_path):
+    _write_minimal_oulad(tmp_path)
+    features, quality = build_features(tmp_path, cutoff_day=28)
+    assert len(features) == 4
+    assert features["id_student"].is_unique
+    student1 = features.set_index("id_student").loc[1]
+    assert student1["assessment_count"] == 1
+    assert student1["mean_score"] == 80
+    assert student1["total_clicks"] == 6
+    assert student1["unique_learning_sites"] == 2
+    assert quality["cutoff_day"] == 28
+    assert quality["duplicate_student_course_rows"] == 0
+
+
+def test_target_mapping_drops_unknown_labels(tmp_path):
+    _write_minimal_oulad(tmp_path)
+    info_path = tmp_path / "studentInfo.csv"
+    info = pd.read_csv(info_path)
+    info.loc[len(info)] = [5, "AAA", "2014J", "M", "North", "A Level", "0-35", 0, 60, "Unknown"]
+    info.to_csv(info_path, index=False)
+    features, _ = build_features(tmp_path, cutoff_day=28)
+    assert set(features["At_Risk"].unique()) == {0, 1}
+    assert 5 not in set(features["id_student"])
+
+
+def test_train_saves_pipeline_metrics_and_keeps_groups_separate(tmp_path):
+    rows = []
+    # 40 unique students with balanced labels and a predictive signal.
+    for student in range(40):
+        rows.append({
+            "id_student": student,
+            "At_Risk": student % 2,
+            "signal": student % 2,
+            "category": "A" if student % 2 else "B",
+        })
+    features_path = tmp_path / "features.csv"
+    model_path = tmp_path / "models" / "model.joblib"
+    metrics_path = tmp_path / "reports" / "metrics.json"
+    pd.DataFrame(rows).to_csv(features_path, index=False)
+    metrics = train(features_path, model_path, metrics_path, seed=7)
+    assert model_path.exists()
+    assert metrics_path.exists()
+    saved = json.loads(metrics_path.read_text())
+    assert saved["split"] == "GroupShuffleSplit by id_student"
+    assert saved["train_students"] + saved["test_students"] == 40
+    assert saved["roc_auc"] is not None
+    assert 0 <= metrics["pr_auc"] <= 1
+
+
+def test_train_rejects_single_class_dataset(tmp_path):
+    features_path = tmp_path / "features.csv"
+    pd.DataFrame({
+        "id_student": range(6),
+        "At_Risk": [1] * 6,
+        "signal": range(6),
+    }).to_csv(features_path, index=False)
+    with pytest.raises(ValueError, match="both At_Risk classes"):
+        train(features_path, tmp_path / "model.joblib", tmp_path / "metrics.json")
