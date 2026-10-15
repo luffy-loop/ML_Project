@@ -35,9 +35,9 @@ def build_features(data_dir, cutoff_day=28):
     """Return features available by cutoff_day and the final-result label.
 
     OULAD dates are relative to the start of a course presentation. Assessment
-    features are restricted using assessments.date <= cutoff_day; VLE features
-    are restricted using studentVle.date <= cutoff_day. Missing/withdrawal date
-    semantics and dataset conventions should be checked against the dataset docs.
+    scores are included only when both the assessment due date and submission
+    date are <= cutoff_day; VLE events are filtered by studentVle.date. Verify
+    dataset date conventions and withdrawal timing before operational claims.
     """
     if cutoff_day < 0:
         raise ValueError("cutoff_day must be >= 0")
@@ -57,7 +57,15 @@ def build_features(data_dir, cutoff_day=28):
         assessments[["id_assessment", "code_module", "code_presentation", "date", "weight"]],
         on="id_assessment", how="left", validate="many_to_one"
     )
-    early_sa = sa[sa["date"].notna() & (sa["date"] <= cutoff_day)].copy()
+    # The assessment due date alone is not enough: a student score is only
+    # available to the predictor after it was submitted. Enforce both clocks.
+    sa["date_submitted"] = pd.to_numeric(sa.get("date_submitted"), errors="coerce")
+    early_sa = sa[
+        sa["date"].notna()
+        & (sa["date"] <= cutoff_day)
+        & sa["date_submitted"].notna()
+        & (sa["date_submitted"] <= cutoff_day)
+    ].copy()
     assessment_features = early_sa.groupby(KEYS).agg(
         mean_score=("score", "mean"),
         max_score=("score", "max"),

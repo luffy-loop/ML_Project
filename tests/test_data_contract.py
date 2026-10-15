@@ -25,7 +25,7 @@ def _write_minimal_oulad(directory: Path):
     pd.DataFrame({
         "id_assessment": [10, 10, 11, 11, 12, 12],
         "id_student": [1, 2, 3, 4, 1, 2],
-        "date_submitted": [5, 7, 20, 21, 35, 36],
+        "date_submitted": [5, 7, 20, 35, 35, 36],
         "is_banked": [0] * 6,
         "score": [80, 30, 0, 90, 100, 45],
     }).to_csv(directory / "studentAssessment.csv", index=False)
@@ -57,6 +57,9 @@ def test_build_features_enforces_day_cutoff_and_one_row_per_student(tmp_path):
     assert student1["mean_score"] == 80
     assert student1["total_clicks"] == 6
     assert student1["unique_learning_sites"] == 2
+    # An assessment due by day 28 but submitted on day 35 must not contribute.
+    student4 = features.set_index("id_student").loc[4]
+    assert pd.isna(student4["assessment_count"])
     assert quality["cutoff_day"] == 28
     assert quality["duplicate_student_course_rows"] == 0
 
