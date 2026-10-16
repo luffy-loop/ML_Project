@@ -1,71 +1,76 @@
 # AI-Powered Student Performance & Success Prediction
 
-A machine-learning project to study student outcomes and identify learners who may benefit from timely academic support.
+A research prototype exploring whether early-course activity and assessment data can help educators identify learners who may benefit from timely, voluntary academic support.
 
-> **Status:** This repository contains exploratory and publication-oriented notebooks, plus a reusable cutoff-aware baseline pipeline and Streamlit demo. The production-style pipeline has not yet been run end-to-end against the full OULAD data in a clean environment. Treat saved notebook metrics as preliminary until the corrected temporal evaluation has completed successfully.
+> **Validation status:** The repository includes a cutoff-aware feature pipeline, grouped model evaluation, training code, a Streamlit demo, tests, and documentation. The full official dataset is not included and this change does not claim to have run the complete dataset pipeline. Saved notebook scores are preliminary. Do not describe this as a validated or production-ready early-warning model until temporal label timing and later-presentation evaluation are verified.
 
-## Repository contents
+## Included
 
-- `MLProject.ipynb` — original exploratory notebook.
-- `OULAD_Final_2026_Q1_Publication_Notebook.ipynb` — extended temporal evaluation, calibration, explainability, fairness and reporting workflow. Run all cells; saved outputs are not proof of a complete run.
-- `src/data.py` — loads OULAD CSVs and creates features filtered to a documented day cutoff.
-- `src/build_features.py` — writes a prepared feature CSV and data-quality report.
-- `src/train.py` — student-grouped baseline, threshold/workload analysis, Brier score, demographic subgroup error audit, permutation importance, and final pipeline artifact.
-- `MODEL_CARD.md` — intended use, evaluation protocol, known risks, and responsible-use limits.
-- `app.py` — Streamlit CSV-scoring demo.
-- `tests/` — lightweight tests using synthetic data; these do not replace validation on the full dataset.
-- `cleaned_AI_Powered_Student_Performance_Prediction_and_Success_Analytics.pptx` — presentation.
-- `AI_POWERED_STUDENT_PERFORMANCE_AND_SUCCESS_PREDICTION_SYSTEM.docx` — project document.
+- `src/data.py` — loads OULAD CSVs and builds day-cutoff features plus data-quality counts.
+- `src/build_features.py` — writes prepared features and a quality report.
+- `src/evaluate_baseline.py` — compares Logistic Regression and Random Forest on a student-grouped holdout.
+- `src/evaluate_temporal.py` — evaluates on the latest course presentation, where available.
+- `src/train.py` — trains a Random Forest pipeline and reports classification metrics, threshold/workload trade-offs, Brier score, subgroup error summaries, and permutation importance.
+- `src/predict.py` — shared prediction helper with input validation.
+- `app.py` — Streamlit scoring demo for prepared feature CSVs.
+- `tests/` — synthetic-data tests for feature contracts, training, and prediction.
+- `MODEL_CARD.md` — intended use, limitations, and responsible-use guidance.
+- `reports/FINAL_RESULTS_TEMPLATE.md` — template for results after a real dataset run.
 
 ## Dataset setup
 
-The feature pipeline expects these OULAD CSV files under `data/raw/`:
+Obtain the Open University Learning Analytics Dataset (OULAD) from its official distribution and review its usage terms. Put these CSV files in `data/raw/`:
 
 - `studentInfo.csv`
 - `studentAssessment.csv`
 - `assessments.csv`
 - `studentVle.csv`
 
-Obtain the dataset from its official distribution and review its usage conditions. Never commit raw student-level data to this repository unless permission and necessity have been verified.
+Raw student-level data is intentionally excluded from Git. The project labels `Withdrawn` or `Fail` as at-risk and `Pass` or `Distinction` as not-at-risk. A final-result label may encode withdrawal events that have already happened by the prediction cutoff; resolve this before making prospective withdrawal-prediction claims.
 
 ## Install
 
-Python 3.10 or newer is recommended.
+Python 3.10+ is recommended.
 
 ```bash
 python -m venv .venv
 # Windows PowerShell
-.venv\\Scripts\\Activate.ps1
+.venv\Scripts\Activate.ps1
 # macOS/Linux
 source .venv/bin/activate
-
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-## Reproducible baseline pipeline
+## Run the pipeline
 
 From the repository root:
 
 ```bash
 python src/build_features.py --data-dir data/raw --cutoff-day 28
+python src/evaluate_baseline.py --features data/processed/features_day28.csv
+python src/evaluate_temporal.py --features data/processed/features_day28.csv
 python src/train.py --features data/processed/features_day28.csv
 pytest -q
 streamlit run app.py
 ```
 
-The build command also writes `reports/data_quality.json`; training writes `reports/metrics.json` and `models/student_risk_pipeline.joblib`. Metrics include held-out threshold/workload comparisons, Brier score, subgroup error-rate summaries (where groups are large enough), and model-agnostic permutation importance. These outputs are generated locally and ignored by Git.
+Feature building writes `reports/data_quality.json`; model comparison writes `reports/model_comparison.json`; temporal evaluation writes `reports/temporal_metrics.json`; training writes `reports/metrics.json` and `models/student_risk_pipeline.joblib`. These generated outputs are not committed by default.
 
-The model uses only input columns present in the feature CSV, excluding `At_Risk` and `id_student`. Keep the student ID for grouped evaluation and identification only; do not use it as a predictive feature. The app accepts a CSV with the same predictors used in training. Remove direct identifiers before using it in any shared demo.
+## Evaluation rules
 
-## Important research caveats
+1. Define the prediction time and use only information available by that time.
+2. Keep `id_student` as a grouping key, never as a predictive feature.
+3. A grouped random holdout prevents the same student from appearing in both partitions, but does not prove future-cohort generalization.
+4. Check that presentation ordering and label timing make the temporal holdout appropriate; evaluate on a genuinely later cohort before claiming future generalization.
+5. Tune thresholds on validation data, not the final test set. Do not treat score bands as calibrated probabilities without calibration analysis.
+6. Review missingness, data quality, subgroup errors, and uncertainty. These checks are diagnostic, not a fairness certification.
+7. Update the presentation and project report only with metrics generated by a clean, reproducible run.
 
-- The label is based on final result (`Fail`/`Withdrawn` = at-risk; `Pass`/`Distinction` = not-at-risk). Predictors must be available at the actual prediction cutoff. The baseline filters assessment definitions and VLE events by date, but the intended cutoff and source dataset date semantics must be verified against OULAD documentation before making operational claims.
-- The grouped holdout prevents the same student ID from being split across train and test, but it is **not** a future-presentation holdout. Evaluate on a genuinely later presentation before claiming future-cohort generalization.
-- Risk bands in `app.py` are illustrative bins, not calibrated operational thresholds. Scores should not be treated as calibrated probabilities until calibration is evaluated.
-- Review the generated threshold analysis, Brier score, subgroup error rates, missingness and permutation importance. These are diagnostic aids, not proof of fairness or causality. Use predictions to offer voluntary support, never as an automatic basis for penalties or access restrictions.
-- The second notebook includes research outputs (SHAP/LIME, timing, fairness, ablation, confidence intervals). Its saved execution metadata shows many cells not completed; run from top to bottom and fix failures before citing its results.
+## Responsible use
 
-## Current completion status
+Use this prototype only for research, demonstrations, and voluntary supportive outreach with human educator review. Never use it to automate grading, discipline, admissions, funding, exclusion, or access restrictions. Protect privacy, use anonymized demo data, and give affected learners an opportunity to contextualize or contest automated signals.
 
-The repository structure and baseline code are in place. **The full data pipeline, publication notebook and interactive demo are not yet verified end-to-end on the full dataset.** Do not claim the project is fully complete until the generated metrics have been reviewed and the project document/presentation have been reconciled with those results.
+## Repository checks
+
+GitHub Actions runs the synthetic-data test suite on pushes and pull requests. Passing synthetic tests validates code contracts only; it does not establish model quality on the official dataset.

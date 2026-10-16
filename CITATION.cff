@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this project, please cite it as described below."
+title: "AI-Powered Student Performance and Success Prediction System"
+type: software
+authors:
+  - family-names: "Kandhula"
+    given-names: "PoojaSri"
+repository-code: "https://github.com/luffy-loop/ML_Project"
+license: "MIT"
