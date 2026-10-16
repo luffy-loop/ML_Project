@@ -1,50 +1,32 @@
-# AI-Powered Student Performance & Success Prediction
+# Fieldnote — Student Success Analytics
 
-A research prototype exploring whether early-course activity and assessment data can help educators identify learners who may benefit from timely, voluntary academic support.
+A polished full-stack research workspace for exploring whether early-course activity and assessment data may help educators offer timely, voluntary academic support. It combines a React + TypeScript interface with FastAPI and the cutoff-aware Python ML pipeline.
 
-> **Validation status:** The repository includes a cutoff-aware feature pipeline, grouped model evaluation, training code, a Streamlit demo, tests, and documentation. The full official dataset is not included and this change does not claim to have run the complete dataset pipeline. Saved notebook scores are preliminary. Do not describe this as a validated or production-ready early-warning model until temporal label timing and later-presentation evaluation are verified.
+> **Research status:** This is a prototype, not a validated early-warning system. The official OULAD dataset is not bundled, and the final-result label may include withdrawal events that occurred before the prediction cutoff. Scores are not validated or calibrated probabilities. Do not use this tool to automate grading, discipline, admissions, funding, exclusion, or access restrictions. Real-data, temporal-validity, calibration and subgroup checks must be completed before prospective claims.
 
 ## Included
 
-- `src/data.py` — loads OULAD CSVs and builds day-cutoff features plus data-quality counts.
-- `src/build_features.py` — writes prepared features and a quality report.
-- `src/evaluate_baseline.py` — compares Logistic Regression and Random Forest on a student-grouped holdout.
-- `src/evaluate_temporal.py` — evaluates on the latest course presentation, where available.
-- `src/train.py` — trains a Random Forest pipeline and reports classification metrics, threshold/workload trade-offs, Brier score, subgroup error summaries, and permutation importance.
-- `src/predict.py` — shared prediction helper with input validation.
-- `app.py` — Streamlit scoring demo for prepared feature CSVs.
-- `tests/` — synthetic-data tests for feature contracts, training, and prediction.
-- `MODEL_CARD.md` — intended use, limitations, and responsible-use guidance.
-- `reports/FINAL_RESULTS_TEMPLATE.md` — template for results after a real dataset run.
+- React + TypeScript interface: overview, prediction desk, model review, data quality and study notes.
+- FastAPI service: health, model metadata, saved reports and guarded CSV scoring.
+- Cutoff-aware feature generation and grouped evaluation diagnostics.
+- Evidence-first empty states; no fabricated demonstration metrics or predictions.
+- Existing Streamlit fallback, Python tests and GitHub Actions checks.
 
-## Dataset setup
+## Requirements and dataset
 
-Obtain the Open University Learning Analytics Dataset (OULAD) from its official distribution and review its usage terms. Put these CSV files in `data/raw/`:
+Python 3.10+ (3.11 recommended), Node.js 20+ and npm. Obtain OULAD from the [official dataset page](https://analyse.kmi.open.ac.uk/open_dataset), review its terms, and place studentInfo.csv, studentAssessment.csv, assessments.csv and studentVle.csv in data/raw/. Raw student data and generated model artifacts are not committed.
 
-- `studentInfo.csv`
-- `studentAssessment.csv`
-- `assessments.csv`
-- `studentVle.csv`
-
-Raw student-level data is intentionally excluded from Git. The project labels `Withdrawn` or `Fail` as at-risk and `Pass` or `Distinction` as not-at-risk. A final-result label may encode withdrawal events that have already happened by the prediction cutoff; resolve this before making prospective withdrawal-prediction claims.
-
-## Install
-
-Python 3.10+ is recommended.
+## Python setup
 
 ```bash
 python -m venv .venv
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
-# macOS/Linux
-source .venv/bin/activate
+# Windows PowerShell: .venv\\Scripts\\Activate.ps1
+# macOS/Linux: source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-## Run the pipeline
-
-From the repository root:
+## Generate features and train
 
 ```bash
 python src/build_features.py --data-dir data/raw --cutoff-day 28
@@ -52,25 +34,74 @@ python src/evaluate_baseline.py --features data/processed/features_day28.csv
 python src/evaluate_temporal.py --features data/processed/features_day28.csv
 python src/train.py --features data/processed/features_day28.csv
 pytest -q
+```
+
+This generates local model and report files such as models/student_risk_pipeline.joblib, reports/metrics.json and reports/data_quality.json. Verify date semantics, label timing and temporal-holdout suitability before citing metrics as evidence of prospective performance. A grouped random holdout does not establish future-cohort generalization.
+
+## Run the full-stack app
+
+Terminal 1 — API from the repository root:
+
+```bash
+uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Terminal 2 — frontend:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Open http://localhost:5173. Vite proxies API requests to FastAPI. API docs: http://127.0.0.1:8000/docs. Scoring requires a trained artifact and prepared feature CSV with the model's predictor columns. Uploads default to 10 MB and 50,000 rows.
+
+## Streamlit fallback
+
+```bash
 streamlit run app.py
 ```
 
-Feature building writes `reports/data_quality.json`; model comparison writes `reports/model_comparison.json`; temporal evaluation writes `reports/temporal_metrics.json`; training writes `reports/metrics.json` and `models/student_risk_pipeline.joblib`. These generated outputs are not committed by default.
+## Docker
 
-## Evaluation rules
+After feature generation and training have created local model artifacts and reports:
 
-1. Define the prediction time and use only information available by that time.
-2. Keep `id_student` as a grouping key, never as a predictive feature.
-3. A grouped random holdout prevents the same student from appearing in both partitions, but does not prove future-cohort generalization.
-4. Check that presentation ordering and label timing make the temporal holdout appropriate; evaluate on a genuinely later cohort before claiming future generalization.
-5. Tune thresholds on validation data, not the final test set. Do not treat score bands as calibrated probabilities without calibration analysis.
-6. Review missingness, data quality, subgroup errors, and uncertainty. These checks are diagnostic, not a fairness certification.
-7. Update the presentation and project report only with metrics generated by a clean, reproducible run.
+```bash
+docker compose up --build
+```
 
-## Responsible use
+Open http://localhost:8000. Compose mounts model and report directories read-only. Training is never triggered implicitly on startup.
 
-Use this prototype only for research, demonstrations, and voluntary supportive outreach with human educator review. Never use it to automate grading, discipline, admissions, funding, exclusion, or access restrictions. Protect privacy, use anonymized demo data, and give affected learners an opportunity to contextualize or contest automated signals.
+## API endpoints
 
-## Repository checks
+| Endpoint | Purpose |
+|---|---|
+| GET /api/health | Service and artifact availability |
+| GET /api/model-info | Model type and predictor fields |
+| GET /api/metrics | Saved evaluation report |
+| GET /api/data-quality | Saved feature-generation report |
+| POST /api/predict | Score a prepared CSV |
+| GET /docs | Interactive API documentation |
 
-GitHub Actions runs the synthetic-data test suite on pushes and pull requests. Passing synthetic tests validates code contracts only; it does not establish model quality on the official dataset.
+Environment options: MODEL_PATH, METRICS_PATH, QUALITY_PATH, MAX_UPLOAD_BYTES, MAX_PREDICTION_ROWS and CORS_ORIGINS. This demo has no authentication; protect it appropriately before using non-public data.
+
+## Quality checks
+
+```bash
+pytest -q
+cd web && npm install && npm run build
+```
+
+Python tests use synthetic inputs and do not validate predictive quality on the official dataset. The frontend only displays saved metrics and quality counts when real reports exist.
+
+## Evaluation and responsible use
+
+1. Define the prediction point and use only information available by that time.
+2. Keep id_student as a grouping key, never a predictor.
+3. Verify assessment and VLE date semantics against official documentation.
+4. Define a prospective target that respects withdrawal timing before making early-warning claims.
+5. Evaluate on a genuinely later presentation and inspect calibration and subgroup errors.
+6. Permutation importance is predictive association, not causation; subgroup diagnostics are not fairness certification.
+7. Use outputs only for voluntary supportive outreach with educator review. Never automate punitive or exclusionary decisions.
+
+See MODEL_CARD.md for intended use and limitations.

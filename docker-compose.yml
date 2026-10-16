@@ -1,0 +1,13 @@
+services:
+  fieldnote:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_PATH: /app/models/student_risk_pipeline.joblib
+      METRICS_PATH: /app/reports/metrics.json
+      QUALITY_PATH: /app/reports/data_quality.json
+    volumes:
+      - ./models:/app/models:ro
+      - ./reports:/app/reports:ro
+    restart: unless-stopped

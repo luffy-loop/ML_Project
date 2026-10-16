@@ -26,3 +26,9 @@ catboost_info/
 Thumbs.db
 .vscode/
 .idea/
+
+# Frontend build artifacts
+node_modules/
+web/node_modules/
+web/dist/
+dist/

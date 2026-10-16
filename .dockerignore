@@ -1,0 +1,16 @@
+.git
+.venv
+venv
+__pycache__
+*.py[cod]
+web/node_modules
+web/dist
+node_modules
+data/raw
+data/processed
+*.csv
+*.joblib
+*.pkl
+*.cbm
+models
+reports/*.json

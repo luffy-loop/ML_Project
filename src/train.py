@@ -5,6 +5,7 @@ from pathlib import Path
 
 import joblib
 import pandas as pd
+from sklearn.calibration import calibration_curve
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
@@ -18,7 +19,9 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     roc_auc_score,
-)
+    roc_curve,
+    precision_recall_curve,
+    )
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
@@ -155,6 +158,15 @@ def train(features_csv, model_path, metrics_path, seed=42):
         key=lambda row: row["importance_mean"],
         reverse=True,
     )[:10]
+    roc_points, pr_points, calibration_points = [], [], []
+    if y_test.nunique() == 2:
+        fpr, tpr, _ = roc_curve(y_test, prob)
+        roc_points = [{"false_positive_rate": float(x), "true_positive_rate": float(y)} for x, y in zip(fpr, tpr)]
+        precision_values, recall_values, _ = precision_recall_curve(y_test, prob)
+        pr_points = [{"recall": float(r), "precision": float(p)} for p, r in zip(precision_values, recall_values)]
+        fraction_positive, mean_predicted = calibration_curve(y_test, prob, n_bins=10, strategy="quantile")
+        calibration_points = [{"mean_predicted": float(x), "fraction_positive": float(y)} for y, x in zip(fraction_positive, mean_predicted)]
+
     metrics = {
         "model": "RandomForestClassifier",
         "split": "GroupShuffleSplit by id_student",
@@ -170,6 +182,9 @@ def train(features_csv, model_path, metrics_path, seed=42):
         "roc_auc": float(roc_auc_score(y_test, prob)) if y_test.nunique() == 2 else None,
         "pr_auc": float(average_precision_score(y_test, prob)),
         "brier_score": float(brier_score_loss(y_test, prob)),
+        "roc_curve": roc_points,
+        "precision_recall_curve": pr_points,
+        "calibration_curve": calibration_points,
         "threshold_analysis": threshold_analysis(y_test, prob),
         "subgroup_audit": subgroup_audit(X.iloc[test_idx], y_test, prob),
         "permutation_importance_top10": importance_rows,
