@@ -6,6 +6,8 @@ from src.predict import predict_frame
 
 
 class DummyPipeline:
+    classes_ = np.array([0, 1])
+
     def __init__(self, probabilities=None):
         self.probabilities = probabilities
 
@@ -26,6 +28,22 @@ def test_predict_frame_preserves_input_and_adds_scores():
     assert list(frame.columns) == ["score", "note"]
     assert result["At_Risk_Score"].tolist() == [0.5, 0.5]
     assert result["Score_Band"].tolist() == ["ELEVATED_SCORE", "ELEVATED_SCORE"]
+
+
+def test_predict_frame_uses_class_label_one_not_probability_column_position():
+    class ReverseOrderPipeline:
+        classes_ = np.array([1, 0])
+
+        def predict_proba(self, frame):
+            # Column 0 is At_Risk=1, column 1 is At_Risk=0.
+            return np.column_stack([np.full(len(frame), 0.9), np.full(len(frame), 0.1)])
+
+    result = predict_frame(
+        pd.DataFrame({"score": [0.2]}),
+        {"pipeline": ReverseOrderPipeline(), "feature_columns": ["score"]},
+    )
+    assert result.loc[0, "At_Risk_Score"] == pytest.approx(0.9)
+    assert result.loc[0, "Score_Band"] == "VERY_HIGH_SCORE"
 
 
 def test_predict_frame_rejects_empty_input():

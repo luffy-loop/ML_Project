@@ -36,7 +36,7 @@ python src/train.py --features data/processed/features_day28.csv
 pytest -q
 ```
 
-This generates local model and report files such as models/student_risk_pipeline.joblib, reports/metrics.json and reports/data_quality.json. Verify date semantics, label timing and temporal-holdout suitability before citing metrics as evidence of prospective performance. A grouped random holdout does not establish future-cohort generalization. Temporal evaluation now excludes earlier rows belonging to students in the latest test presentation; this prevents student overlap but may reduce the training sample and does not itself prove prospective validity.
+This generates local model and report files such as models/student_risk_pipeline.joblib, reports/metrics.json and reports/data_quality.json. Verify date semantics, label timing and temporal-holdout suitability before citing metrics as evidence of prospective performance. A grouped random holdout does not establish future-cohort generalization. Temporal evaluation excludes earlier rows belonging to students in the latest test presentation; this prevents student overlap but may reduce the training sample and does not itself prove prospective validity.
 
 ## Run the full-stack app
 
@@ -92,7 +92,7 @@ pytest -q
 cd web && npm install && npm run build
 ```
 
-The automated tests include API upload validation, prediction-schema and score checks, and a synthetic regression test ensuring assessment submissions and VLE events after the configured cutoff do not enter the feature set. They use synthetic fixtures and do not validate predictive quality on the official dataset. The frontend only displays saved metrics and quality counts when real reports exist.
+The automated tests include API upload validation, prediction-schema and score checks, a class-label ordering regression test, and a synthetic regression test ensuring assessment submissions and VLE events after the configured cutoff do not enter the feature set. They use synthetic fixtures and do not validate predictive quality on the official dataset. The frontend only displays saved metrics and quality counts when real reports exist.
 
 ## Evaluation and responsible use
 
