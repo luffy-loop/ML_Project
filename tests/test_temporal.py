@@ -49,3 +49,16 @@ def test_temporal_evaluation_requires_multiple_presentations(tmp_path):
 
     with pytest.raises(ValueError, match="At least two presentations"):
         evaluate(source, tmp_path / "report.json")
+
+
+def test_temporal_evaluation_rejects_final_result_target_leakage(tmp_path):
+    source = tmp_path / "leaky_features.csv"
+    pd.DataFrame({
+        "id_student": range(8),
+        "code_presentation": ["2013B"] * 4 + ["2014B"] * 4,
+        "At_Risk": [0, 1] * 4,
+        "signal": [0, 1] * 4,
+        "final_result": ["Pass", "Fail"] * 4,
+    }).to_csv(source, index=False)
+    with pytest.raises(ValueError, match="final_result.*must not be used as a predictor"):
+        evaluate(source, tmp_path / "temporal.json")

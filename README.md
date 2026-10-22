@@ -9,6 +9,7 @@ A polished full-stack research workspace for exploring whether early-course acti
 - React + TypeScript interface: overview, prediction desk, model review, data quality and study notes.
 - FastAPI service: health, model metadata, saved reports and guarded CSV scoring.
 - Cutoff-aware feature generation and grouped evaluation diagnostics.
+- Training and evaluation refuse the raw `final_result` label as a predictor to prevent direct target leakage.
 - Evidence-first empty states; no fabricated demonstration metrics or predictions.
 - Existing Streamlit fallback, Python tests and GitHub Actions checks.
 

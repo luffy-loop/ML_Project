@@ -91,6 +91,11 @@ def train(features_csv, model_path, metrics_path, seed=42):
     required = {"At_Risk", "id_student"}
     if not required.issubset(df.columns):
         raise ValueError(f"Feature CSV must contain {sorted(required)}.")
+    if "final_result" in df.columns:
+        raise ValueError(
+            "Leakage-prone outcome column 'final_result' must not be used as a predictor; "
+            "regenerate cutoff-safe features without final-result labels."
+        )
     df = df.dropna(subset=["At_Risk", "id_student"]).copy()
     df["At_Risk"] = pd.to_numeric(df["At_Risk"], errors="coerce")
     df = df.dropna(subset=["At_Risk"])

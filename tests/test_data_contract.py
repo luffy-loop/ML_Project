@@ -7,6 +7,7 @@ import pytest
 
 from src.data import build_features
 from src.train import train, threshold_analysis, subgroup_audit
+from src.evaluate_baseline import evaluate as evaluate_baseline
 
 
 def _write_minimal_oulad(directory: Path):
@@ -127,3 +128,27 @@ def test_train_rejects_single_class_dataset(tmp_path):
     }).to_csv(features_path, index=False)
     with pytest.raises(ValueError, match="both At_Risk classes"):
         train(features_path, tmp_path / "model.joblib", tmp_path / "metrics.json")
+
+
+def test_train_rejects_final_result_target_leakage(tmp_path):
+    features_path = tmp_path / "leaky_features.csv"
+    pd.DataFrame({
+        "id_student": range(8),
+        "At_Risk": [0, 1] * 4,
+        "signal": [0, 1] * 4,
+        "final_result": ["Pass", "Fail"] * 4,
+    }).to_csv(features_path, index=False)
+    with pytest.raises(ValueError, match="final_result.*must not be used as a predictor"):
+        train(features_path, tmp_path / "model.joblib", tmp_path / "metrics.json")
+
+
+def test_baseline_evaluation_rejects_final_result_target_leakage(tmp_path):
+    features_path = tmp_path / "leaky_features.csv"
+    pd.DataFrame({
+        "id_student": range(8),
+        "At_Risk": [0, 1] * 4,
+        "signal": [0, 1] * 4,
+        "final_result": ["Pass", "Fail"] * 4,
+    }).to_csv(features_path, index=False)
+    with pytest.raises(ValueError, match="final_result.*must not be used as a predictor"):
+        evaluate_baseline(features_path, output=tmp_path / "baseline.json")

@@ -11,4 +11,4 @@ Run it with:
 python src/evaluate_baseline.py --features data/prepared_cutoff_safe_features.csv
 ```
 
-This is an evaluation scaffold, not a complete data pipeline. Do not feed it the current notebook's final-outcome aggregates until you have rebuilt those aggregates to respect the intended cutoff. A grouped split helps avoid student overlap but cannot by itself prevent target leakage. If the intended use is future presentations, also report a chronological/presentation holdout.
+This is an evaluation scaffold, not a complete data pipeline. The training and evaluation scripts reject a raw `final_result` column because it directly reveals the target. Do not feed the current notebook's final-outcome aggregates until you have rebuilt those aggregates to respect the intended cutoff. A grouped split helps avoid student overlap but cannot by itself prevent other forms of target leakage. If the intended use is future presentations, also report a chronological/presentation holdout.

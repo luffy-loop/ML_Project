@@ -25,6 +25,11 @@ def evaluate(path, test_size=0.2, seed=42, output="reports/model_comparison.json
     df = pd.read_csv(path)
     if missing := ({TARGET, GROUP} - set(df.columns)):
         raise ValueError(f"Missing required columns: {sorted(missing)}")
+    if "final_result" in df.columns:
+        raise ValueError(
+            "Leakage-prone outcome column 'final_result' must not be used as a predictor; "
+            "regenerate cutoff-safe features without final-result labels."
+        )
     df[TARGET] = pd.to_numeric(df[TARGET], errors="coerce")
     df = df.dropna(subset=[TARGET, GROUP]).copy()
     if not set(df[TARGET].unique()).issubset({0, 1}) or df[TARGET].nunique() != 2:

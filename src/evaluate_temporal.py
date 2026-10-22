@@ -27,6 +27,11 @@ def evaluate(features_path, output_path="reports/temporal_metrics.json"):
     if missing:
         raise ValueError(f"Temporal evaluation requires columns: {sorted(missing)}")
 
+    if "final_result" in df.columns:
+        raise ValueError(
+            "Leakage-prone outcome column 'final_result' must not be used as a predictor; "
+            "regenerate cutoff-safe features without final-result labels."
+        )
     df["At_Risk"] = pd.to_numeric(df["At_Risk"], errors="coerce")
     df = df.dropna(subset=["At_Risk", "code_presentation", "id_student"]).copy()
     if df.empty or not set(df["At_Risk"].unique()).issubset({0, 1}) or df["At_Risk"].nunique() != 2:
