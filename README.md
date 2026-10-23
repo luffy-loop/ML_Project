@@ -93,7 +93,7 @@ pytest -q
 cd web && npm install && npm run build
 ```
 
-The automated tests include API upload validation, prediction-schema and score checks, a class-label ordering regression test, and a synthetic regression test ensuring assessment submissions and VLE events after the configured cutoff do not enter the feature set. They use synthetic fixtures and do not validate predictive quality on the official dataset. The frontend only displays saved metrics and quality counts when real reports exist.
+The automated tests include API upload validation, prediction-schema and score checks, class-label ordering and malformed-probability-matrix regression tests, and a synthetic regression test ensuring assessment submissions and VLE events after the configured cutoff do not enter the feature set. They use synthetic fixtures and do not validate predictive quality on the official dataset. The frontend only displays saved metrics and quality counts when real reports exist.
 
 ## Evaluation and responsible use
 

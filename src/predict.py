@@ -85,11 +85,23 @@ def predict_frame(frame, artifact):
     if not callable(getattr(pipeline, "predict_proba", None)):
         raise ValueError("Invalid model artifact: pipeline must implement predict_proba.")
     try:
-        probabilities = np.asarray(pipeline.predict_proba(features))
-    except (IndexError, TypeError) as exc:
-        raise ValueError("Model could not return prediction probabilities.") from exc
-    if probabilities.ndim != 2 or probabilities.shape[0] != len(frame):
+        probabilities = np.asarray(pipeline.predict_proba(features), dtype=float)
+    except (IndexError, TypeError, ValueError) as exc:
+        raise ValueError("Model could not return numeric prediction probabilities.") from exc
+    if (
+        probabilities.ndim != 2
+        or probabilities.shape[0] != len(frame)
+        or probabilities.shape[1] < 2
+    ):
         raise ValueError("Model returned an unexpected prediction probability shape.")
+    if not np.isfinite(probabilities).all() or ((probabilities < 0) | (probabilities > 1)).any():
+        raise ValueError(
+            "Model returned an invalid probability matrix: values must be finite and in [0, 1]."
+        )
+    if not np.allclose(probabilities.sum(axis=1), 1.0, rtol=1e-5, atol=1e-6):
+        raise ValueError(
+            "Model returned an invalid probability matrix: each row must sum to 1."
+        )
     positive_index = _positive_class_index(pipeline, probabilities)
     scores = probabilities[:, positive_index]
     if scores.shape != (len(frame),):

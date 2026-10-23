@@ -76,3 +76,25 @@ def test_predict_frame_rejects_invalid_model_scores(probabilities):
 def test_predict_frame_rejects_invalid_artifact():
     with pytest.raises(ValueError, match="feature_columns"):
         predict_frame(pd.DataFrame({"score": [0.2]}), {"pipeline": DummyPipeline(), "feature_columns": []})
+
+
+@pytest.mark.parametrize(
+    "matrix, message",
+    [
+        ([[1.5, 0.5]], "finite and in \\[0, 1\\]"),
+        ([[np.nan, 0.5]], "finite and in \\[0, 1\\]"),
+        ([[0.8, 0.8]], "each row must sum to 1"),
+    ],
+)
+def test_predict_frame_rejects_invalid_probability_matrix(matrix, message):
+    class MalformedPipeline:
+        classes_ = np.array([0, 1])
+
+        def predict_proba(self, frame):
+            return np.asarray(matrix, dtype=float)
+
+    with pytest.raises(ValueError, match=message):
+        predict_frame(
+            pd.DataFrame({"score": [0.2]}),
+            {"pipeline": MalformedPipeline(), "feature_columns": ["score"]},
+        )
